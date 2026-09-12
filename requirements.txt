@@ -1,3 +1,5 @@
-reportlab
 streamlit
 pandas
+openpyxl
+reportlab
+python-pptx
