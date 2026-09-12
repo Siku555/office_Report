@@ -80,7 +80,7 @@ if not st.session_state.logged_in:
     password = st.text_input("Password", type="password", value="admin123")
 
     if st.button("Secure Login", use_container_width=True):
-      if username == "admin" and password == "admin123":
+      if username == "admin" and password == "siku123":
         st.session_state.logged_in = True
         st.rerun()
       else:
