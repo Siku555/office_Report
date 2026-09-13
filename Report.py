@@ -113,13 +113,11 @@ def get_strict_year_file(year_folder, *keywords):
         folder_files = glob.glob(os.path.join(path, "*.xlsx"))
         valid_files = [f for f in folder_files if not os.path.basename(f).startswith("~$")]
         
-        # Try finding a file matching ALL keywords
         for f in valid_files:
             fname_lower = os.path.basename(f).lower()
             if all(kw.lower() in fname_lower for kw in keywords if kw):
                 return f
                 
-        # Fallback to ANY keyword
         for kw in keywords:
             if kw:
                 matched = next((f for f in valid_files if kw.lower() in os.path.basename(f).lower()), "")
@@ -128,26 +126,38 @@ def get_strict_year_file(year_folder, *keywords):
         if valid_files:
             return valid_files[0]
 
-    # If folder doesn't exist, fallback to ROOT directory with exact year filtering
     root_files = glob.glob(os.path.join(BASE_DIR, "*.xlsx"))
     valid_root_files = [f for f in root_files if not os.path.basename(f).startswith("~$")]
     
     year_str = "2025" if "2025" in year_folder else "2026"
     
-    # Try ALL keywords with year filter
     for f in valid_root_files:
         fname_lower = os.path.basename(f).lower()
-        if year_str in fname_lower or ("2024" in fname_lower and "2025" in year_folder):
+        if year_str in fname_lower or ("2024" in fname_lower and "2025" in year_folder) or ("2027" in fname_lower and "2026" in year_folder):
             if all(kw.lower() in fname_lower for kw in keywords if kw):
                 return f
 
-    # Try ANY keyword with year filter
     for kw in keywords:
         if kw:
-            matched = next((f for f in valid_root_files if kw.lower() in os.path.basename(f).lower() and (year_str in os.path.basename(f) or ("2024" in os.path.basename(f) and "2025" in year_folder))), "")
-            if matched:
-                return matched
-                
+            for f in valid_root_files:
+                fname_lower = os.path.basename(f).lower()
+                if year_str in fname_lower or ("2024" in fname_lower and "2025" in year_folder) or ("2027" in fname_lower and "2026" in year_folder):
+                    if kw.lower() in fname_lower:
+                        return f
+
+    # Fallback strictly matching keyword if year isn't explicitly in filename
+    for f in valid_root_files:
+        fname_lower = os.path.basename(f).lower()
+        if all(kw.lower() in fname_lower for kw in keywords if kw):
+            return f
+            
+    for kw in keywords:
+        if kw:
+            for f in valid_root_files:
+                fname_lower = os.path.basename(f).lower()
+                if kw.lower() in fname_lower:
+                    return f
+
     return valid_root_files[0] if valid_root_files else ""
 
 
@@ -203,6 +213,7 @@ page = st.sidebar.radio(
         "📈 Comparative Report Section",
         "♿ CWSN Section",
         "🏫 School Profile Section",
+        "📂 Submission Tracker",
     ],
 )
 
@@ -2636,3 +2647,131 @@ elif page == "🏫 School Profile Section":
         "School Contact Details file (`School_Contact_Details`) not found in"
         " directory."
     )
+
+# =========================================================================
+# PAGE 7: SUBMISSION TRACKER (ADVANCED WITH STATUS FILTER)
+# =========================================================================
+elif page == "📂 Submission Tracker":
+  st.markdown(
+      "<div class='main-header'>📂 Report Submission Tracker</div>",
+      unsafe_allow_html=True,
+  )
+  
+  col_m1, col_m2 = st.columns([2, 1])
+  with col_m1:
+      st.markdown("Upload any collected data Excel file to instantly cross-check with the Master School List.")
+  with col_m2:
+      master_year = st.selectbox(
+          "🎯 Select Master List Year:", 
+          ["2025-26", "2026-27"], 
+          index=["2025-26", "2026-27"].index(selected_year)
+      )
+
+  st.markdown("---")
+
+  contact_file = get_strict_year_file(master_year, "contact")
+  master_df = pd.read_excel(contact_file) if contact_file and os.path.exists(contact_file) else pd.DataFrame()
+
+  if not master_df.empty:
+    st.info(f"✅ **Linked Master File:** `{os.path.basename(contact_file)}`")
+    
+    udise_m = next((c for c in master_df.columns if "udise" in str(c).lower() or "school_code" in str(c).lower()), master_df.columns[0])
+    name_m = next((c for c in master_df.columns if "school_name" in str(c).lower() or "name" in str(c).lower()), master_df.columns[1])
+    block_m = next((c for c in master_df.columns if "block" in str(c).lower()), None)
+    mgmt_m = next((c for c in master_df.columns if "management" in str(c).lower() or "mgmt" in str(c).lower()), None)
+    cat_m = next((c for c in master_df.columns if "category" in str(c).lower() or "cat" in str(c).lower()), None)
+
+    master_df["Clean_UDISE"] = master_df[udise_m].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+
+    st.markdown("<div class='sub-header'>📤 Upload Collected Data Report</div>", unsafe_allow_html=True)
+    uploaded_file = st.file_uploader("Upload Excel File (.xlsx, .xls)", type=["xlsx", "xls"])
+
+    if uploaded_file:
+      with st.spinner('Cross-checking with Master List...'):
+        sub_df = pd.read_excel(uploaded_file)
+        
+        udise_s = next(
+            (c for c in sub_df.columns if "udise" in str(c).lower() or "school code" in str(c).lower() or "school_code" in str(c).lower()), 
+            None
+        )
+
+        if udise_s:
+          sub_df["Clean_UDISE"] = sub_df[udise_s].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+          submitted_udises = set(sub_df["Clean_UDISE"].dropna().unique())
+
+          master_df["Submission Status"] = master_df["Clean_UDISE"].apply(
+              lambda x: "✅ Submitted" if x in submitted_udises else "❌ Not Submitted"
+          )
+
+          total_master = len(master_df)
+          total_sub = master_df["Submission Status"].value_counts().get("✅ Submitted", 0)
+          total_pend = master_df["Submission Status"].value_counts().get("❌ Not Submitted", 0)
+
+          st.markdown("### 📊 Verification Result")
+          col1, col2, col3 = st.columns(3)
+          col1.info(f"🏫 **Total Schools:** `{total_master}`")
+          col2.success(f"✅ **Submitted:** `{total_sub}`")
+          col3.error(f"❌ **Pending:** `{total_pend}`")
+          st.markdown("<br>", unsafe_allow_html=True)
+
+          filter_opt = st.radio(
+              "🔍 Filter List View:", 
+              ["Show All Schools (With Status)", "Show Defaulters Only (Not Submitted)", "Show Submitted Only"],
+              horizontal=True
+          )
+
+          if filter_opt == "Show Defaulters Only (Not Submitted)":
+              filtered_df = master_df[master_df["Submission Status"] == "❌ Not Submitted"]
+              rep_title = "Defaulter_List"
+          elif filter_opt == "Show Submitted Only":
+              filtered_df = master_df[master_df["Submission Status"] == "✅ Submitted"]
+              rep_title = "Submitted_List"
+          else:
+              filtered_df = master_df
+              rep_title = "All_Schools_Status_List"
+
+          def clean_mgmt(val):
+              v = str(val).lower()
+              if "1" in v or "17" in v or "department" in v or "gov" in v: return "Department of Education"
+              return "Other Management"
+
+          display_df = pd.DataFrame({
+              "Name of Block": filtered_df[block_m].astype(str).str.split("(").str[0].str.strip().str.upper() if block_m else "AMRI",
+              "UDISE Code": filtered_df[udise_m],
+              "Name of School": filtered_df[name_m],
+              "Management": filtered_df[mgmt_m].apply(clean_mgmt) if mgmt_m else "Department of Education",
+              "School Category": filtered_df[cat_m].apply(map_cat_highest_class) if cat_m else "Lower Primary",
+              "Status": filtered_df["Submission Status"]
+          })
+
+          display_df = display_df.reset_index(drop=True)
+          display_df.index = display_df.index + 1
+          display_df.index.name = "SL No."
+
+          st.dataframe(display_df, use_container_width=True)
+
+          col_dl1, col_dl2 = st.columns([1, 2])
+          with col_dl1:
+              if not display_df.empty:
+                  pdf_bytes = generate_pdf_bytes(display_df, rep_title.replace("_", " "))
+                  st.download_button(
+                      label=f"📥 Download {rep_title.replace('_', ' ')} (PDF)",
+                      data=pdf_bytes,
+                      file_name=f"{rep_title}_{selected_year}.pdf",
+                      mime="application/pdf",
+                      use_container_width=True
+                  )
+          with col_dl2:
+              if not display_df.empty:
+                  csv_data = display_df.to_csv().encode('utf-8')
+                  st.download_button(
+                      label="📥 Download Excel/CSV Data",
+                      data=csv_data,
+                      file_name=f"{rep_title}_{selected_year}.csv",
+                      mime="text/csv",
+                      use_container_width=True
+                  )
+        else:
+          st.error("❌ **UDISE Code Not Found!** Upload ki gayi file mein UDISE ya School Code ka koi column nahi mila.")
+  else:
+    st.warning(f"⚠️ `{master_year}` folder mein School Contact (Master) file nahi mili.")
