@@ -127,22 +127,16 @@ def load_enrolment_and_teacher_data(year_folder):
     )
 
   if not os.path.exists(enrol_file):
-    all_x = glob.glob(os.path.join(path, "*.xlsx")) + glob.glob(os.path.join(BASE_DIR, "*.xlsx")) + glob.glob("*.xlsx")
+    all_x = glob.glob(os.path.join(path, "*.xlsx"))
     enrol_file = next(
-        (
-            f
-            for f in all_x
-            if year_folder[:4] in f
-            and "enrol" in f.lower()
-            and "cwsn" not in f.lower()
-        ),
+        (f for f in all_x if "enrol" in f.lower() and "cwsn" not in f.lower()),
         all_x[0] if all_x else "",
     )
 
   if not os.path.exists(teacher_file):
-    all_x = glob.glob(os.path.join(path, "*.xlsx")) + glob.glob(os.path.join(BASE_DIR, "*.xlsx")) + glob.glob("*.xlsx")
+    all_x = glob.glob(os.path.join(path, "*.xlsx"))
     teacher_file = next(
-        (f for f in all_x if year_folder[:4] in f and "teacher" in f.lower()),
+        (f for f in all_x if "teacher" in f.lower()),
         teacher_file,
     )
 
@@ -945,19 +939,8 @@ elif page == "📈 Educational Performance Indicators":
       p1 = os.path.join(path, fname)
       if os.path.exists(p1):
         return p1
-      p2 = os.path.join(BASE_DIR, fname)
-      if os.path.exists(p2):
-        return p2
-      matches = glob.glob(
-          os.path.join(BASE_DIR, "**", f"*{fname.split('_')[0]}*.xlsx"),
-          recursive=True,
-      )
-      clean_matches = [
-          m
-          for m in matches
-          if "classrooms" not in m.lower() and "cwsn" not in m.lower()
-      ]
-      return clean_matches[0] if clean_matches else (matches[0] if matches else fname)
+      matches = glob.glob(os.path.join(path, "*.xlsx"))
+      return matches[0] if matches else fname
 
     prev_file = find_file(prev_name)
     curr_file = find_file(curr_name)
@@ -1459,7 +1442,7 @@ elif page == "📈 Educational Performance Indicators":
     )
 
 # =========================================================================
-# PAGE 3: CIVIL & INFRASTRUCTURE SECTION (SUPER OPTIMIZED & CACHED)
+# PAGE 3: CIVIL & INFRASTRUCTURE SECTION
 # =========================================================================
 elif page == "🏫 Civil & Infrastructure Section":
   st.markdown(
@@ -1487,17 +1470,21 @@ elif page == "🏫 Civil & Infrastructure Section":
     if not os.path.exists(path):
       path = BASE_DIR
 
-    all_x = (
-        glob.glob(os.path.join(path, "*.xlsx"))
-        + glob.glob(os.path.join(BASE_DIR, "*.xlsx"))
-        + glob.glob("*.xlsx")
-    )
-    valid_files = [f for f in all_x if not os.path.basename(f).startswith("~$")]
+    valid_files = [
+        f
+        for f in glob.glob(os.path.join(path, "*.xlsx"))
+        if not os.path.basename(f).startswith("~$")
+    ]
 
     matched_file = ""
     if report_name == "Electricity":
       matched_file = next(
-          (f for f in valid_files if "classrooms" in f.lower() or "toilet" in f.lower()), ""
+          (
+              f
+              for f in valid_files
+              if "classrooms" in f.lower() or "toilet" in f.lower()
+          ),
+          "",
       )
     elif any(k in report_name for k in ["Internet", "Computer_Labs"]):
       matched_file = next(
@@ -1527,7 +1514,11 @@ elif page == "🏫 Civil & Infrastructure Section":
         ]
     ):
       matched_file = next(
-          (f for f in valid_files if "drinking_water_other_details" in f.lower()),
+          (
+              f
+              for f in valid_files
+              if "drinking_water_other_details" in f.lower()
+          ),
           "",
       )
     else:
@@ -1975,7 +1966,7 @@ elif page == "🏫 Civil & Infrastructure Section":
       )
 
 # =========================================================================
-# PAGE 4: COMPARATIVE REPORT SECTION (SUPER FAST & OPTIMIZED)
+# PAGE 4: COMPARATIVE REPORT SECTION
 # =========================================================================
 elif page == "📈 Comparative Report Section":
   st.markdown(
@@ -2026,13 +2017,10 @@ elif page == "📈 Comparative Report Section":
     path = os.path.join(BASE_DIR, y_folder)
     if not os.path.exists(path):
       path = BASE_DIR
-    all_x = (
-        glob.glob(os.path.join(path, "*.xlsx"))
-        + glob.glob(os.path.join(BASE_DIR, "*.xlsx"))
-        + glob.glob("*.xlsx")
-    )
     valid_files = [
-        f for f in all_x if not os.path.basename(f).startswith("~$")
+        f
+        for f in glob.glob(os.path.join(path, "*.xlsx"))
+        if not os.path.basename(f).startswith("~$")
     ]
 
     matched_file = ""
@@ -2357,12 +2345,11 @@ elif page == "♿ CWSN Section":
     if not os.path.exists(path):
       path = BASE_DIR
 
-    all_x = (
-        glob.glob(os.path.join(path, "*.xlsx"))
-        + glob.glob(os.path.join(BASE_DIR, "*.xlsx"))
-        + glob.glob("*.xlsx")
-    )
-    valid_files = [f for f in all_x if not os.path.basename(f).startswith("~$")]
+    valid_files = [
+        f
+        for f in glob.glob(os.path.join(path, "*.xlsx"))
+        if not os.path.basename(f).startswith("~$")
+    ]
 
     enrol_file = next(
         (f for f in valid_files if "cwsn" in f.lower() and "enrol" in f.lower()),
@@ -2534,12 +2521,11 @@ elif page == "🏫 School Profile Section":
     path = os.path.join(BASE_DIR, year_folder)
     if not os.path.exists(path):
       path = BASE_DIR
-    all_x = (
-        glob.glob(os.path.join(path, "*.xlsx"))
-        + glob.glob(os.path.join(BASE_DIR, "*.xlsx"))
-        + glob.glob("*.xlsx")
-    )
-    valid_files = [f for f in all_x if not os.path.basename(f).startswith("~$")]
+    valid_files = [
+        f
+        for f in glob.glob(os.path.join(path, "*.xlsx"))
+        if not os.path.basename(f).startswith("~$")
+    ]
     contact_file = next(
         (f for f in valid_files if "contact" in f.lower()), ""
     )
