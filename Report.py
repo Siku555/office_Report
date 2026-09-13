@@ -2,6 +2,7 @@ import glob
 import os
 import re
 import io
+import pathlib
 import pandas as pd
 import streamlit as st
 from reportlab.lib.pagesizes import letter, landscape
@@ -100,10 +101,11 @@ if "civil_drilldown" not in st.session_state:
 if "civil_yes_drilldown" not in st.session_state:
   st.session_state.civil_yes_drilldown = False
 
-# --- ROBUST BASE DIRECTORY RESOLUTION ---
+# --- ROBUST CROSS-PLATFORM BASE DIRECTORY RESOLUTION ---
+CURRENT_DIR = pathlib.Path(__file__).parent.resolve()
 BASE_DIR = r"D:\Report_py"
 if not os.path.exists(BASE_DIR):
-  BASE_DIR = "."
+  BASE_DIR = str(CURRENT_DIR)
 
 @st.cache_data
 def load_enrolment_and_teacher_data(year_folder):
