@@ -80,7 +80,7 @@ if not st.session_state.logged_in:
     password = st.text_input("Password", type="password", value="admin123")
 
     if st.button("Secure Login", use_container_width=True):
-      if username == "admin" and password == "siku123":
+      if username == "admin" and password == "admin123":
         st.session_state.logged_in = True
         st.rerun()
       else:
@@ -105,6 +105,52 @@ BASE_DIR = r"D:\Report_py"
 if not os.path.exists(BASE_DIR):
   BASE_DIR = "."
 
+# --- STRICT YEAR-FILTERED FILE FINDER ---
+def get_strict_year_file(year_folder, *keywords):
+    path = os.path.join(BASE_DIR, year_folder)
+    
+    if os.path.exists(path):
+        folder_files = glob.glob(os.path.join(path, "*.xlsx"))
+        valid_files = [f for f in folder_files if not os.path.basename(f).startswith("~$")]
+        
+        # Try finding a file matching ALL keywords
+        for f in valid_files:
+            fname_lower = os.path.basename(f).lower()
+            if all(kw.lower() in fname_lower for kw in keywords if kw):
+                return f
+                
+        # Fallback to ANY keyword
+        for kw in keywords:
+            if kw:
+                matched = next((f for f in valid_files if kw.lower() in os.path.basename(f).lower()), "")
+                if matched:
+                    return matched
+        if valid_files:
+            return valid_files[0]
+
+    # If folder doesn't exist, fallback to ROOT directory with exact year filtering
+    root_files = glob.glob(os.path.join(BASE_DIR, "*.xlsx"))
+    valid_root_files = [f for f in root_files if not os.path.basename(f).startswith("~$")]
+    
+    year_str = "2025" if "2025" in year_folder else "2026"
+    
+    # Try ALL keywords with year filter
+    for f in valid_root_files:
+        fname_lower = os.path.basename(f).lower()
+        if year_str in fname_lower or ("2024" in fname_lower and "2025" in year_folder):
+            if all(kw.lower() in fname_lower for kw in keywords if kw):
+                return f
+
+    # Try ANY keyword with year filter
+    for kw in keywords:
+        if kw:
+            matched = next((f for f in valid_root_files if kw.lower() in os.path.basename(f).lower() and (year_str in os.path.basename(f) or ("2024" in os.path.basename(f) and "2025" in year_folder))), "")
+            if matched:
+                return matched
+                
+    return valid_root_files[0] if valid_root_files else ""
+
+
 @st.cache_data
 def load_enrolment_and_teacher_data(year_folder):
   path = os.path.join(BASE_DIR, year_folder)
@@ -127,24 +173,10 @@ def load_enrolment_and_teacher_data(year_folder):
     )
 
   if not os.path.exists(enrol_file):
-    all_x = glob.glob(os.path.join(BASE_DIR, "*.xlsx")) + glob.glob("*.xlsx")
-    enrol_file = next(
-        (
-            f
-            for f in all_x
-            if year_folder[:4] in f
-            and "enrol" in f.lower()
-            and "cwsn" not in f.lower()
-        ),
-        all_x[0] if all_x else "",
-    )
+    enrol_file = get_strict_year_file(year_folder, "enrol")
 
   if not os.path.exists(teacher_file):
-    all_x = glob.glob(os.path.join(BASE_DIR, "*.xlsx")) + glob.glob("*.xlsx")
-    teacher_file = next(
-        (f for f in all_x if year_folder[:4] in f and "teacher" in f.lower()),
-        teacher_file,
-    )
+    teacher_file = get_strict_year_file(year_folder, "teacher")
 
   df_enrol = (
       pd.read_excel(enrol_file)
@@ -1483,65 +1515,20 @@ elif page == "🏫 Civil & Infrastructure Section":
 
   @st.cache_data
   def load_exact_mapped_report(year_folder, report_name, mgmt_filter):
-    path = os.path.join(BASE_DIR, year_folder)
-    if not os.path.exists(path):
-      path = BASE_DIR
-
-    all_x = (
-        glob.glob(os.path.join(path, "*.xlsx"))
-        + glob.glob(os.path.join(BASE_DIR, "*.xlsx"))
-        + glob.glob("*.xlsx")
-    )
-    valid_files = [f for f in all_x if not os.path.basename(f).startswith("~$")]
-
     matched_file = ""
     if report_name == "Electricity":
-      matched_file = next(
-          (f for f in valid_files if "classrooms" in f.lower() or "toilet" in f.lower()), ""
-      )
+      matched_file = get_strict_year_file(year_folder, "classrooms", "toilet")
     elif any(k in report_name for k in ["Internet", "Computer_Labs"]):
-      matched_file = next(
-          (f for f in valid_files if "physical_facilities" in f.lower()), ""
-      )
-    elif any(
-        k in report_name
-        for k in [
-            "DrinkingWater_Avail",
-            "FuncDrinkingWater",
-            "Water",
-        ]
-    ):
-      matched_file = next(
-          (f for f in valid_files if "school_basic_details" in f.lower()), ""
-      )
-    elif any(
-        k in report_name
-        for k in [
-            "Library",
-            "ReadingCorner",
-            "LandAvail",
-            "Playgrnd",
-            "Ramp",
-            "Hand-Rails",
-            "Kitc_Gard",
-        ]
-    ):
-      matched_file = next(
-          (f for f in valid_files if "drinking_water_other_details" in f.lower()),
-          "",
-      )
+      matched_file = get_strict_year_file(year_folder, "physical_facilities")
+    elif any(k in report_name for k in ["DrinkingWater_Avail", "FuncDrinkingWater", "Water"]):
+      matched_file = get_strict_year_file(year_folder, "school_basic_details")
+    elif any(k in report_name for k in ["Library", "ReadingCorner", "LandAvail", "Playgrnd", "Ramp", "Hand-Rails", "Kitc_Gard"]):
+      matched_file = get_strict_year_file(year_folder, "drinking_water_other_details")
     else:
-      matched_file = next(
-          (
-              f
-              for f in valid_files
-              if "classrooms" in f.lower() or "toilet" in f.lower()
-          ),
-          valid_files[0] if valid_files else "",
-      )
-
-    if not matched_file or not os.path.exists(matched_file):
-      matched_file = valid_files[0] if valid_files else ""
+      matched_file = get_strict_year_file(year_folder, "classrooms", "toilet")
+      
+    if not matched_file:
+      matched_file = get_strict_year_file(year_folder)
 
     df = (
         pd.read_excel(matched_file)
@@ -1691,6 +1678,18 @@ elif page == "🏫 Civil & Infrastructure Section":
           ),
           None,
       )
+      
+      if not target_col:
+        core_parts = [p.lower() for p in clean_report_key.replace("_", " ").replace("-", " ").split() if p.lower() not in ["avail", "status", "of", "fac", "exp", "schfacl", "wise", "block"]]
+        for c in df.columns:
+            if core_parts and all(p in str(c).lower() for p in core_parts):
+                target_col = c
+                break
+        if not target_col:
+            for c in df.columns:
+                if core_parts and any(p in str(c).lower() for p in core_parts):
+                    target_col = c
+                    break
 
     if not target_col and len(df.columns) > 9:
       target_col = df.columns[9]
@@ -1720,6 +1719,7 @@ elif page == "🏫 Civil & Infrastructure Section":
       if target_col and target_col in b_data.columns:
         for idx, row in b_data.iterrows():
           val_raw = row[target_col]
+          v_str = str(val_raw).strip().lower()
 
           if is_numeric_rule_report:
             try:
@@ -1731,16 +1731,14 @@ elif page == "🏫 Civil & Infrastructure Section":
                 no_cnt += 1
                 deficient_rows_list.append(row)
             except (ValueError, TypeError):
-              v_str = str(val_raw).strip().lower()
-              if v_str.startswith("1") or "yes" in v_str or v_str == "y":
+              if v_str.startswith("1") or "yes" in v_str or v_str in ["y", "true", "available", "functional"]:
                 yes_cnt += 1
                 yes_rows_list.append(row)
               else:
                 no_cnt += 1
                 deficient_rows_list.append(row)
           else:
-            v_str = str(val_raw).strip().lower()
-            if v_str.startswith("1") or v_str == "yes" or v_str == "y" or v_str == "true":
+            if v_str.startswith("1") or "yes" in v_str or v_str in ["y", "true", "available", "functional"]:
               yes_cnt += 1
               yes_rows_list.append(row)
             else:
@@ -1859,7 +1857,7 @@ elif page == "🏫 Civil & Infrastructure Section":
 
       with col_left:
         st.markdown(
-            f"**Not Available School List:** `{len(deficient_df)}`"
+            f"**Deficient / 'No' Schools Found:** `{len(deficient_df)}`"
         )
         if st.button(
             "🚀 View Deficient School List ('No')",
@@ -1917,7 +1915,7 @@ elif page == "🏫 Civil & Infrastructure Section":
 
       with col_right:
         st.markdown(
-            f"**Available Schools List:** `{len(yes_df)}`"
+            f"**Available / 'Yes' Schools Found:** `{len(yes_df)}`"
         )
         if st.button(
             "🚀 View Available School List ('Yes')",
@@ -1975,7 +1973,7 @@ elif page == "🏫 Civil & Infrastructure Section":
       )
 
 # =========================================================================
-# PAGE 4: COMPARATIVE REPORT SECTION (FAST & CACHED)
+# PAGE 4: COMPARATIVE REPORT SECTION
 # =========================================================================
 elif page == "📈 Comparative Report Section":
   st.markdown(
@@ -2023,70 +2021,22 @@ elif page == "📈 Comparative Report Section":
 
   @st.cache_data
   def get_summary_for_mgmt(y_folder, r_name, m_type):
-    path = os.path.join(BASE_DIR, y_folder)
-    if not os.path.exists(path):
-      path = BASE_DIR
-    all_x = (
-        glob.glob(os.path.join(path, "*.xlsx"))
-        + glob.glob(os.path.join(BASE_DIR, "*.xlsx"))
-        + glob.glob("*.xlsx")
-    )
-    valid_files = [
-        f for f in all_x if not os.path.basename(f).startswith("~$")
-    ]
-
     matched_file = ""
     if r_name == "Electricity":
-      matched_file = next(
-          (
-              f
-              for f in valid_files
-              if "classrooms" in f.lower() or "toilet" in f.lower()
-          ),
-          "",
-      )
+      matched_file = get_strict_year_file(y_folder, "classrooms", "toilet")
     elif any(k in r_name for k in ["Internet", "Computer_Labs"]):
-      matched_file = next(
-          (f for f in valid_files if "physical_facilities" in f.lower()), ""
-      )
+      matched_file = get_strict_year_file(y_folder, "physical_facilities")
     elif any(k in r_name for k in ["DrinkingWater_Avail", "FuncDrinkingWater", "Water"]):
-      matched_file = next(
-          (f for f in valid_files if "school_basic_details" in f.lower()), ""
-      )
-    elif any(
-        k in r_name
-        for k in [
-            "Library",
-            "ReadingCorner",
-            "LandAvail",
-            "Playgrnd",
-            "Ramp",
-            "Hand-Rails",
-            "Kitc_Gard",
-        ]
-    ):
-      matched_file = next(
-          (
-              f
-              for f in valid_files
-              if "drinking_water_other_details" in f.lower()
-          ),
-          "",
-      )
+      matched_file = get_strict_year_file(y_folder, "school_basic_details")
+    elif any(k in r_name for k in ["Library", "ReadingCorner", "LandAvail", "Playgrnd", "Ramp", "Hand-Rails", "Kitc_Gard"]):
+      matched_file = get_strict_year_file(y_folder, "drinking_water_other_details")
     else:
-      matched_file = next(
-          (
-              f
-              for f in valid_files
-              if "classrooms" in f.lower() or "toilet" in f.lower()
-          ),
-          valid_files[0] if valid_files else "",
-      )
+      matched_file = get_strict_year_file(y_folder, "classrooms", "toilet")
+      
+    if not matched_file:
+      matched_file = get_strict_year_file(y_folder)
 
-    if not matched_file or not os.path.exists(matched_file):
-      matched_file = valid_files[0] if valid_files else ""
-
-    df = pd.read_excel(matched_file) if os.path.exists(matched_file) else pd.DataFrame()
+    df = pd.read_excel(matched_file) if matched_file and os.path.exists(matched_file) else pd.DataFrame()
     if df.empty:
       return pd.DataFrame()
 
@@ -2215,6 +2165,19 @@ elif page == "📈 Comparative Report Section":
           ),
           None,
       )
+      
+      if not target_col:
+        core_parts = [p.lower() for p in clean_report_key.replace("_", " ").replace("-", " ").split() if p.lower() not in ["avail", "status", "of", "fac", "exp", "schfacl", "wise", "block"]]
+        for c in df.columns:
+            if core_parts and all(p in str(c).lower() for p in core_parts):
+                target_col = c
+                break
+        if not target_col:
+            for c in df.columns:
+                if core_parts and any(p in str(c).lower() for p in core_parts):
+                    target_col = c
+                    break
+
     if not target_col and len(df.columns) > 9:
       target_col = df.columns[9]
 
@@ -2265,6 +2228,8 @@ elif page == "📈 Comparative Report Section":
         if target_col and target_col in b_data.columns:
           for idx, row in b_data.iterrows():
             val_raw = row[target_col]
+            v_str = str(val_raw).strip().lower()
+
             if is_numeric_rule:
               try:
                 if float(val_raw) > 0:
@@ -2272,14 +2237,12 @@ elif page == "📈 Comparative Report Section":
                 else:
                   n_cnt += 1
               except (ValueError, TypeError):
-                v_str = str(val_raw).strip().lower()
-                if v_str.startswith("1") or "yes" in v_str or v_str == "y":
+                if v_str.startswith("1") or "yes" in v_str or v_str in ["y", "true", "available", "functional"]:
                   y_cnt += 1
                 else:
                   n_cnt += 1
             else:
-              v_str = str(val_raw).strip().lower()
-              if v_str.startswith("1") or v_str == "yes" or v_str == "y" or v_str == "true":
+              if v_str.startswith("1") or "yes" in v_str or v_str in ["y", "true", "available", "functional"]:
                 y_cnt += 1
               else:
                 n_cnt += 1
@@ -2390,25 +2353,12 @@ elif page == "♿ CWSN Section":
 
   @st.cache_data
   def load_cwsn_data(year_folder):
-    path = os.path.join(BASE_DIR, year_folder)
-    if not os.path.exists(path):
-      path = BASE_DIR
-
-    all_x = (
-        glob.glob(os.path.join(path, "*.xlsx"))
-        + glob.glob(os.path.join(BASE_DIR, "*.xlsx"))
-        + glob.glob("*.xlsx")
-    )
-    valid_files = [f for f in all_x if not os.path.basename(f).startswith("~$")]
-
-    enrol_file = next(
-        (f for f in valid_files if "cwsn" in f.lower() and "enrol" in f.lower()),
-        "",
-    )
-    list_file = next(
-        (f for f in valid_files if "cwsn" in f.lower() and "student" in f.lower()),
-        "",
-    )
+    enrol_file = get_strict_year_file(year_folder, "cwsn", "enrol")
+    if not enrol_file:
+      enrol_file = get_strict_year_file(year_folder, "cwsn")
+    list_file = get_strict_year_file(year_folder, "cwsn", "student")
+    if not list_file:
+      list_file = get_strict_year_file(year_folder, "student")
 
     df_enrol = (
         pd.read_excel(enrol_file)
@@ -2568,18 +2518,7 @@ elif page == "🏫 School Profile Section":
 
   @st.cache_data
   def load_school_profile(year_folder):
-    path = os.path.join(BASE_DIR, year_folder)
-    if not os.path.exists(path):
-      path = BASE_DIR
-    all_x = (
-        glob.glob(os.path.join(path, "*.xlsx"))
-        + glob.glob(os.path.join(BASE_DIR, "*.xlsx"))
-        + glob.glob("*.xlsx")
-    )
-    valid_files = [f for f in all_x if not os.path.basename(f).startswith("~$")]
-    contact_file = next(
-        (f for f in valid_files if "contact" in f.lower()), ""
-    )
+    contact_file = get_strict_year_file(year_folder, "contact")
     return (
         pd.read_excel(contact_file)
         if contact_file and os.path.exists(contact_file)
