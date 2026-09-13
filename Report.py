@@ -127,7 +127,7 @@ def load_enrolment_and_teacher_data(year_folder):
     )
 
   if not os.path.exists(enrol_file):
-    all_x = glob.glob(os.path.join(BASE_DIR, "*.xlsx")) + glob.glob("*.xlsx")
+    all_x = glob.glob(os.path.join(path, "*.xlsx")) + glob.glob(os.path.join(BASE_DIR, "*.xlsx")) + glob.glob("*.xlsx")
     enrol_file = next(
         (
             f
@@ -140,7 +140,7 @@ def load_enrolment_and_teacher_data(year_folder):
     )
 
   if not os.path.exists(teacher_file):
-    all_x = glob.glob(os.path.join(BASE_DIR, "*.xlsx")) + glob.glob("*.xlsx")
+    all_x = glob.glob(os.path.join(path, "*.xlsx")) + glob.glob(os.path.join(BASE_DIR, "*.xlsx")) + glob.glob("*.xlsx")
     teacher_file = next(
         (f for f in all_x if year_folder[:4] in f and "teacher" in f.lower()),
         teacher_file,
@@ -1459,7 +1459,7 @@ elif page == "📈 Educational Performance Indicators":
     )
 
 # =========================================================================
-# PAGE 3: CIVIL & INFRASTRUCTURE SECTION
+# PAGE 3: CIVIL & INFRASTRUCTURE SECTION (SUPER OPTIMIZED & CACHED)
 # =========================================================================
 elif page == "🏫 Civil & Infrastructure Section":
   st.markdown(
@@ -1975,7 +1975,7 @@ elif page == "🏫 Civil & Infrastructure Section":
       )
 
 # =========================================================================
-# PAGE 4: COMPARATIVE REPORT SECTION (FAST & CACHED)
+# PAGE 4: COMPARATIVE REPORT SECTION (SUPER FAST & OPTIMIZED)
 # =========================================================================
 elif page == "📈 Comparative Report Section":
   st.markdown(
@@ -2022,7 +2022,7 @@ elif page == "📈 Comparative Report Section":
   ]
 
   @st.cache_data
-  def get_summary_for_mgmt(y_folder, r_name, m_type):
+  def get_all_comparative_summaries(y_folder, r_name):
     path = os.path.join(BASE_DIR, y_folder)
     if not os.path.exists(path):
       path = BASE_DIR
@@ -2088,7 +2088,7 @@ elif page == "📈 Comparative Report Section":
 
     df = pd.read_excel(matched_file) if os.path.exists(matched_file) else pd.DataFrame()
     if df.empty:
-      return pd.DataFrame()
+      return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
     while len(df) > 0:
       first_val = str(df.iloc[0, 0]).strip()
@@ -2114,7 +2114,6 @@ elif page == "📈 Comparative Report Section":
         None,
     )
     if mgmt_col:
-
       def map_mgmt(val):
         val_str = str(val).strip()
         if (
@@ -2143,8 +2142,6 @@ elif page == "📈 Comparative Report Section":
         return "Other Management"
 
       df["Standardized_Management"] = df[mgmt_col].fillna("").apply(map_mgmt)
-      if m_type != "All Management":
-        df = df[df["Standardized_Management"] == m_type]
     else:
       df["Standardized_Management"] = "Department of Education"
 
@@ -2218,86 +2215,58 @@ elif page == "📈 Comparative Report Section":
     if not target_col and len(df.columns) > 9:
       target_col = df.columns[9]
 
-    blocks = ["AMRI", "CHINTHONG", "RONGKHANG", "SOCHENG"]
-    rows = []
-
     numeric_rule_reports = [
-        "Toilet_ExclCWSN_B_Tot",
-        "Toilet_ExclCWSN_B_Func",
-        "Toilet_ExclCWSN_RunWat_B",
-        "Toilet_ExclCWSN_G_Tot",
-        "Toilet_ExclCWSN_G_Func",
-        "Toilet_ExclCWSN_RunWat_G",
-        "Urnl_B_Tot",
-        "Urnl_G_Tot",
+        "Toilet_ExclCWSN_B_Tot", "Toilet_ExclCWSN_B_Func", "Toilet_ExclCWSN_RunWat_B",
+        "Toilet_ExclCWSN_G_Tot", "Toilet_ExclCWSN_G_Func", "Toilet_ExclCWSN_RunWat_G",
+        "Urnl_B_Tot", "Urnl_G_Tot",
     ]
     is_numeric_rule = r_name in numeric_rule_reports
+    blocks = ["AMRI", "CHINTHONG", "RONGKHANG", "SOCHENG"]
 
-    for b in blocks:
-      b_data = df[df["Standardized_Block"] == b].copy()
-      if r_name == "Electricity":
-        y_cnt = (
-            (b_data[target_col].astype(str).str.contains("1-Yes")).sum()
-            if target_col in b_data.columns
-            else 0
-        )
-        n_cnt = (
-            (b_data[target_col].astype(str).str.contains("2-No")).sum()
-            if target_col in b_data.columns
-            else 0
-        )
-        nf_cnt = (
-            (b_data[target_col].astype(str).str.contains("3-Yes")).sum()
-            if target_col in b_data.columns
-            else 0
-        )
-        tot = y_cnt + n_cnt + nf_cnt
-        pct = round((y_cnt / tot * 100), 2) if tot > 0 else 0.0
-        rows.append({
-            "1-Yes": int(y_cnt),
-            "2-No": int(n_cnt),
-            "3-Not Func": int(nf_cnt),
-            "Total": int(tot),
-            "% Avail": f"{pct}%",
-        })
-      else:
-        y_cnt, n_cnt = 0, 0
-        if target_col and target_col in b_data.columns:
-          for idx, row in b_data.iterrows():
-            val_raw = row[target_col]
-            if is_numeric_rule:
-              try:
-                if float(val_raw) > 0:
-                  y_cnt += 1
-                else:
-                  n_cnt += 1
-              except (ValueError, TypeError):
-                v_str = str(val_raw).strip().lower()
-                if v_str.startswith("1") or "yes" in v_str or v_str == "y":
-                  y_cnt += 1
-                else:
-                  n_cnt += 1
-            else:
-              v_str = str(val_raw).strip().lower()
-              if v_str.startswith("1") or v_str == "yes" or v_str == "y" or v_str == "true":
-                y_cnt += 1
+    def compute_for_subset(sub_df):
+      rows = []
+      for b in blocks:
+        b_data = sub_df[sub_df["Standardized_Block"] == b].copy()
+        if r_name == "Electricity":
+          y_cnt = (b_data[target_col].astype(str).str.contains("1-Yes")).sum() if target_col in b_data.columns else 0
+          n_cnt = (b_data[target_col].astype(str).str.contains("2-No")).sum() if target_col in b_data.columns else 0
+          nf_cnt = (b_data[target_col].astype(str).str.contains("3-Yes")).sum() if target_col in b_data.columns else 0
+          tot = y_cnt + n_cnt + nf_cnt
+          pct = round((y_cnt / tot * 100), 2) if tot > 0 else 0.0
+          rows.append({"1-Yes": int(y_cnt), "2-No": int(n_cnt), "3-Not Func": int(nf_cnt), "Total": int(tot), "% Avail": f"{pct}%"})
+        else:
+          y_cnt, n_cnt = 0, 0
+          if target_col and target_col in b_data.columns:
+            for idx, row in b_data.iterrows():
+              val_raw = row[target_col]
+              if is_numeric_rule:
+                try:
+                  if float(val_raw) > 0: y_cnt += 1
+                  else: n_cnt += 1
+                except (ValueError, TypeError):
+                  v_str = str(val_raw).strip().lower()
+                  if v_str.startswith("1") or "yes" in v_str or v_str == "y": y_cnt += 1
+                  else: n_cnt += 1
               else:
-                n_cnt += 1
-        tot = y_cnt + n_cnt
-        pct = round((y_cnt / tot * 100), 2) if tot > 0 else 0.0
-        rows.append({
-            "1-Yes": int(y_cnt),
-            "2-No": int(n_cnt),
-            "Total": int(tot),
-            "% Avail": f"{pct}%",
-        })
-    res_df = pd.DataFrame(rows, index=blocks)
-    res_df.loc["Grand Total"] = res_df.sum(numeric_only=True)
-    tot_y = res_df.loc["Grand Total", "1-Yes"]
-    tot_t = res_df.loc["Grand Total", "Total"]
-    tot_p = round((tot_y / tot_t * 100), 2) if tot_t > 0 else 0.0
-    res_df.loc["Grand Total", "% Avail"] = f"{tot_p}%"
-    return res_df
+                v_str = str(val_raw).strip().lower()
+                if v_str.startswith("1") or v_str == "yes" or v_str == "y" or v_str == "true": y_cnt += 1
+                else: n_cnt += 1
+          tot = y_cnt + n_cnt
+          pct = round((y_cnt / tot * 100), 2) if tot > 0 else 0.0
+          rows.append({"1-Yes": int(y_cnt), "2-No": int(n_cnt), "Total": int(tot), "% Avail": f"{pct}%"})
+      res_df = pd.DataFrame(rows, index=blocks)
+      res_df.loc["Grand Total"] = res_df.sum(numeric_only=True)
+      tot_y = res_df.loc["Grand Total", "1-Yes"]
+      tot_t = res_df.loc["Grand Total", "Total"]
+      tot_p = round((tot_y / tot_t * 100), 2) if tot_t > 0 else 0.0
+      res_df.loc["Grand Total", "% Avail"] = f"{tot_p}%"
+      return res_df
+
+    df_all_res = compute_for_subset(df)
+    df_dept_res = compute_for_subset(df[df["Standardized_Management"] == "Department of Education"])
+    df_oth_res = compute_for_subset(df[df["Standardized_Management"] == "Other Management"])
+
+    return df_all_res, df_dept_res, df_oth_res
 
   selected_comp_report = st.selectbox(
       "Choose Report for Comparative Analysis",
@@ -2311,14 +2280,8 @@ elif page == "📈 Comparative Report Section":
         f"### 📊 Multi-Management Comparison: `{selected_comp_report}`"
     )
 
-    df_all = get_summary_for_mgmt(
-        selected_year, selected_comp_report, "All Management"
-    )
-    df_dept = get_summary_for_mgmt(
-        selected_year, selected_comp_report, "Department of Education"
-    )
-    df_oth = get_summary_for_mgmt(
-        selected_year, selected_comp_report, "Other Management"
+    df_all, df_dept, df_oth = get_all_comparative_summaries(
+        selected_year, selected_comp_report
     )
 
     if not df_all.empty:
